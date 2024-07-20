@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+
+contract StockRewardToken is ERC20, Ownable, ERC20Burnable {
+    event Redeemed(address indexed user, string stockName, uint256 cost);
+
+    enum StockType { TCS, Infosys, Wipro }
+
+    mapping(StockType => uint256) public stockCosts;
+    mapping(address => StockType) public userRedemptions;
+    mapping(address => string) public lastRedeemedStockName;
+ 
+    constructor(address initialOwner) ERC20("Stock Reward Token", "SRT") Ownable(initialOwner) {
+        initializeStockCosts();
+    }
+
+    function initializeStockCosts() internal {
+        stockCosts[StockType.TCS] = 1000;
+        stockCosts[StockType.Infosys] = 1500;
+        stockCosts[StockType.Wipro] = 2000;
+    }
+
+    function updateStockCost(StockType stockType, uint256 cost) external onlyOwner {
+        stockCosts[stockType] = cost;
+    }
+
+    function mintTokens(address recipient, uint256 amount) external onlyOwner {
+        _mint(recipient, amount);
+    }
+
+    function transferTokens(address recipient, uint256 amount) external {
+        require(balanceOf(msg.sender) >= amount, "INSUFFICIENT TOKENS!");
+        _transfer(msg.sender, recipient, amount);
+    }
+
+    function burnTokens(uint256 amount) external {
+        require(balanceOf(msg.sender) >= amount, "INSUFFICIENT TOKENS!");
+        _burn(msg.sender, amount);
+        emit Redeemed(msg.sender, "Burned tokens", amount);
+    }
+
+    function redeemStockByName(string calldata stockName) external {
+        StockType stockType = getStockTypeByName(stockName);
+        uint256 cost = stockCosts[stockType];
+
+        require(cost >= 0, "Invalid stock type"); // Allow free entries
+        require(balanceOf(msg.sender) >= cost, "INSUFFICIENT TOKENS!");
+
+        userRedemptions[msg.sender] = stockType;
+        lastRedeemedStockName[msg.sender] = stockName;
+        _burn(msg.sender, cost);
+        emit Redeemed(msg.sender, stockName, cost);
+    }
+
+  
+    function redeemedStock() external view returns (string memory) {
+        return lastRedeemedStockName[msg.sender];
+    }
+
+    function getStockTypeByName(string calldata stockName) internal pure returns (StockType) {
+        if (compareStrings(stockName, "TCS")) {
+            return StockType.TCS;
+        } else if (compareStrings(stockName, "Infosys")) {
+            return StockType.Infosys;
+        } else if (compareStrings(stockName, "Wipro")) {
+            return StockType.Wipro;
+        } else {
+            revert("Invalid stock name");
+        }
+    }
+
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
+    }
+}
